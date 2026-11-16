@@ -1,0 +1,142 @@
+rules_version = '2';
+// กฎความปลอดภัยของฐานข้อมูลร้านตามใจ — หน้าเว็บคุยกับ Firestore ตรงๆ จึงต้องบังคับสิทธิ์ที่นี่
+// บทบาทของผู้ใช้อ่านจากเอกสาร users/{uid}
+//   ลูกค้า: ดูเมนู/โต๊ะ/จำนวนวัตถุดิบ, ส่งออเดอร์เข้าคิว guestOrders, ดูสถานะออเดอร์ตัวเองจากรหัสคิว (track)
+//   owner: ทุกอย่าง (อนุมัติยกเลิก จัดการผู้ใช้ ดู Audit Log) · finance: ขาย/รับเงิน/ขอยกเลิก/ลูกค้า
+//   stock: สต็อก + ดู/เสิร์ฟออเดอร์
+//   kitchen (ฝ่ายรับออเดอร์): รับออเดอร์ที่ลูกค้าส่งเข้ามา ทำอาหาร แล้วกดยืนยันเมื่อทำเสร็จ (ไม่เห็นข้อมูลลูกค้า/บิล/เงิน)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasProfile() { return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isOwner() { return hasProfile() && profile().role == 'owner'; }
+    function isCashier() { return hasProfile() && profile().role in ['owner', 'finance']; }
+    function isStockMgr() { return hasProfile() && profile().role in ['owner', 'stock']; }
+    function isStaff() { return hasProfile() && profile().role in ['owner', 'finance', 'stock', 'kitchen']; }
+    function isKitchen() { return hasProfile() && profile().role == 'kitchen'; }
+    // รับออเดอร์ลูกค้าจากคิวได้: แคชเชียร์ + ฝ่ายรับออเดอร์
+    function canTakeOrders() { return hasProfile() && profile().role in ['owner', 'finance', 'kitchen']; }
+    function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+    function validProfile(roles) {
+      return request.resource.data.keys().hasOnly(['username', 'role', 'display_name', 'email'])
+        && request.resource.data.role in roles
+        && request.resource.data.display_name is string && request.resource.data.display_name.size() <= 60
+        && request.resource.data.username is string && request.resource.data.email is string;
+    }
+
+    // อ่านโปรไฟล์ได้เฉพาะของตัวเอง (owner อ่านได้ทุกคน เพื่อจัดการสิทธิ์)
+    // ลูกค้าสมัครเองได้ โดยสร้างโปรไฟล์ role = customer ของตัวเองได้ครั้งเดียว (แก้/ลบเองไม่ได้ กันเลื่อนสิทธิ์ตัวเอง)
+    // owner เพิ่มพนักงาน/เปลี่ยนบทบาทคนอื่นได้ แต่แก้ของตัวเองไม่ได้
+    match /users/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isOwner());
+      allow list: if isOwner();
+      allow create: if (request.auth != null && request.auth.uid == uid
+          && validProfile(['customer'])
+          && request.resource.data.username == request.auth.token.email.lower()
+          && request.resource.data.email == request.auth.token.email.lower())
+        || (isOwner() && uid != request.auth.uid && validProfile(['owner', 'finance', 'stock', 'kitchen']));
+      allow update: if isOwner() && uid != request.auth.uid && validProfile(['owner', 'finance', 'stock', 'kitchen', 'customer']);
+      allow delete: if false;
+    }
+
+    match /menu/{id} {
+      allow read: if true;
+      // เพิ่ม/แก้/ลบเมนู (และรีเซ็ตข้อมูลตัวอย่าง) — เจ้าของร้านเท่านั้น ราคาต้องมากกว่า 0
+      // รูปเมนู (ฟิลด์ image) เป็นข้อความ ไม่เกิน ~180 KB
+      allow create, update: if isOwner() && request.resource.data.price > 0
+        && (!('image' in request.resource.data) || (request.resource.data.image is string && request.resource.data.image.size() <= 180000));
+      allow delete: if isOwner();
+    }
+
+    match /tables/{id} {
+      allow read: if true; // ลูกค้าสแกน QR แล้วต้องตรวจว่าโต๊ะมีอยู่จริง
+      allow write: if isOwner();
+    }
+
+    match /stock/{id} {
+      allow read: if true; // ลูกค้าต้องเห็นว่าเมนูไหนวัตถุดิบหมด
+      allow create: if isStockMgr() && request.resource.data.qty >= 0;
+      allow update: if isStaff() && request.resource.data.qty >= 0; // ฝ่ายการเงินตัด/คืนสต็อกตอนขาย
+      allow delete: if isOwner();
+    }
+
+    match /customers/{id} {
+      // ฝ่ายรับออเดอร์อ่านได้เฉพาะ c0 (ลูกค้าทั่วไป) ที่ต้องใช้ตอนรับออเดอร์ — ไม่เห็นชื่อ/เบอร์โทรสมาชิก
+      allow read: if hasProfile() && (profile().role in ['owner', 'finance', 'stock'] || (isKitchen() && id == 'c0'));
+      allow create: if isOwner() || (isCashier() && request.resource.data.points == 0);
+      allow update: if isCashier();
+      allow delete: if isOwner();
+    }
+
+    match /employees/{id} {
+      allow read, write: if isOwner();
+    }
+
+    match /orders/{id} {
+      allow read: if isStaff();
+      // แคชเชียร์สร้างออเดอร์ได้ทุกแบบ · ฝ่ายรับออเดอร์สร้างได้เฉพาะออเดอร์ "กำลังทำ" ของลูกค้าทั่วไป (ตอนรับจากคิว)
+      allow create: if isCashier()
+        || (isKitchen() && request.resource.data.status == 'cooking' && request.resource.data.customer_id == 'c0');
+      allow update: if isStaff() && (
+        // เสิร์ฟ: ทุกบทบาทพนักงาน (cooking → served) แก้ได้เฉพาะ status
+        (onlyChanges(['status']) && resource.data.status == 'cooking' && request.resource.data.status == 'served')
+        // ฝ่ายการเงินขอยกเลิก: ใส่ cancel_request ได้ครั้งเดียว ห้ามแก้อย่างอื่น
+        || (isCashier() && onlyChanges(['cancel_request']) && !('cancel_request' in resource.data)
+            && resource.data.status != 'cancelled' && request.resource.data.cancel_request.keys().hasOnly(['by', 'role', 'reason', 'at']))
+        // เจ้าของร้านเท่านั้น: ยกเลิก (พร้อมเหตุผล) หรือปฏิเสธคำขอ (ลบ cancel_request)
+        || (isOwner() && resource.data.status != 'cancelled' && request.resource.data.status == 'cancelled'
+            && onlyChanges(['status', 'cancel_reason', 'cancelled_by', 'cancel_request']))
+        || (isOwner() && onlyChanges(['cancel_request'])));
+      allow delete: if isOwner();
+    }
+
+    match /payments/{id} {
+      allow read: if hasProfile() && profile().role in ['owner', 'finance', 'stock'];
+      allow write: if isCashier();
+      // ฝ่ายรับออเดอร์: ตอนรับออเดอร์จากคิว ออกบิล "รอชำระ" ได้เท่านั้น (รับเงิน/แก้/ลบบิลไม่ได้ และอ่านบิลไม่ได้)
+      allow create: if isKitchen() && request.resource.data.status == 'pending'
+        && request.resource.data.method == null && request.resource.data.paid_at == null
+        && request.resource.data.customer_id == 'c0';
+    }
+
+    // สถานะออเดอร์ให้ลูกค้าติดตาม: อ่านได้เฉพาะคนที่รู้รหัสคิว (สุ่มยาว เดาไม่ได้) ดูรายการทั้งหมดไม่ได้ · พนักงานเป็นคนอัปเดต
+    match /track/{ticket} {
+      allow get: if true;
+      allow list: if isOwner(); // เจ้าของร้านล้างข้อมูลตอนรีเซ็ต
+      allow create, update: if isStaff();
+      allow delete: if isOwner();
+    }
+
+    match /meta/{id} {
+      allow read, write: if canTakeOrders(); // ตัวนับเลขออเดอร์/เลขบิล
+    }
+
+    // ออเดอร์ที่ลูกค้าส่งเอง: สร้างได้ทั้งแบบไม่ล็อกอินและล็อกอินเป็นลูกค้า แต่ต้องมีรูปร่างตามนี้
+    // (ถ้าแนบ email ต้องตรงกับอีเมลที่ล็อกอินอยู่ ปลอมอีเมลคนอื่นไม่ได้) · แคชเชียร์และฝ่ายรับออเดอร์เท่านั้นที่อ่าน/รับ/ลบได้
+    match /guestOrders/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['items', 'table', 'created_at', 'email'])
+        && (!('email' in request.resource.data)
+            || (request.auth != null && request.resource.data.email == request.auth.token.email.lower()))
+        && request.resource.data.items is list
+        && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 30
+        && request.resource.data.table is string && request.resource.data.table.size() <= 20
+        && request.resource.data.created_at is number;
+      allow read, update, delete: if canTakeOrders();
+    }
+
+    // บันทึกการใช้งาน (Audit Log): พนักงานเขียนได้เฉพาะในชื่อตัวเอง เวลาต้องเป็นเวลาของเซิร์ฟเวอร์
+    // แก้/ลบไม่ได้เลย (แม้เป็นเจ้าของร้าน) · อ่านได้เฉพาะเจ้าของร้าน
+    match /audit/{id} {
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['at', 'uid', 'name', 'role', 'action', 'target', 'detail'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.action is string && request.resource.data.action.size() <= 60
+        && request.resource.data.target is string && request.resource.data.target.size() <= 100
+        && request.resource.data.detail is string && request.resource.data.detail.size() <= 300;
+      allow read: if isOwner();
+      allow update, delete: if false;
+    }
+  }
+}

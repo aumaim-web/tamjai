@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ตามใจ ระบบจัดการร้าน</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%231E7BE0'/%3E%3Ctext x='50' y='72' font-size='60' text-anchor='middle'%3E%F0%9F%8D%9C%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#1E7BE0">
+<script>try{var t=localStorage.getItem('tamjai-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18c0 4.97-4.03 8.5-9 8.5S3 15.97 3 11z" fill="currentColor" fill-opacity=".25"/><path d="M8.5 21h7"/><path d="M8 3.5c0 1.6 1.4 1.9 1.4 3.4M12 2.5c0 1.8 1.4 2.2 1.4 4.2M16 3.5c0 1.6 1.4 1.9 1.4 3.4"/></svg></span>
+      <div class="brand-text"><b>ตามใจ</b><span class="tag">ระบบจัดการร้านอาหาร</span></div>
+    </div>
+    <div class="grow"></div>
+    <span class="role" id="roleTag"></span>
+    <button class="iconbtn" id="themeBtn" aria-label="สลับโหมดสว่าง/มืด" title="สลับโหมดสว่าง/มืด"></button>
+    <button class="btn" id="loginBtn">เข้าสู่ระบบ</button>
+    <span class="clock num" id="clock"></span>
+  </header>
+  <div class="body">
+    <nav class="side" id="side" aria-label="เมนูหลัก"></nav>
+    <main class="main" id="main"></main>
+  </div>
+  <footer class="statusbar">
+    <span id="stUser"></span>
+    <span id="stInfo"></span>
+    <span class="grow"></span>
+    <span id="stConn">กำลังเชื่อมต่อฐานข้อมูล…</span>
+    <button class="linkbtn" id="resetBtn" hidden>รีเซ็ตเป็นข้อมูลตัวอย่าง</button>
+    <button class="linkbtn" id="logoutBtn" hidden>ออกจากระบบ</button>
+  </footer>
+</div>
+<div id="modalHost"></div>
+
+<script>
+// ถ้าสคริปต์ตัวใดพัง ให้แสดงข้อความบนหน้าจอแทนที่จะว่างเปล่า (จะได้รู้ว่าติดอะไร)
+function showFatal(msg){var m=document.getElementById('main'),c=document.getElementById('stConn');if(c)c.textContent='ไม่ได้เชื่อมต่อ';if(m&&!m.firstElementChild)m.innerHTML='<div class="panel empty">เปิดระบบไม่สำเร็จ: '+String(msg).replace(/[<>&]/g,'')+'<br>ลองกด Ctrl+Shift+R หรือปิดส่วนขยายบล็อกโฆษณา/ตัวป้องกันการติดตามสำหรับเว็บนี้</div>'}
+window.addEventListener('error',function(e){showFatal((e.message||'error')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''))});
+window.addEventListener('unhandledrejection',function(e){showFatal(e.reason&&e.reason.message||e.reason)});
+</script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/qrcode.min.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/seed-data.js"></script>
+<script src="js/db.js"></script>
+<script src="js/api.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/components.js"></script>
+<script src="js/views/dashboard.js"></script>
+<script src="js/views/pos.js"></script>
+<script src="js/views/orders.js"></script>
+<script src="js/views/kitchen.js"></script>
+<script src="js/views/payments.js"></script>
+<script src="js/views/customers.js"></script>
+<script src="js/views/employees.js"></script>
+<script src="js/views/stock.js"></script>
+<script src="js/views/menu.js"></script>
+<script src="js/views/tables.js"></script>
+<script src="js/views/track.js"></script>
+<script src="js/views/users.js"></script>
+<script src="js/views/audit.js"></script>
+<script src="js/views/reports.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

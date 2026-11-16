@@ -1,0 +1,10 @@
+{
+  "name": "tamjai-restaurant",
+  "version": "2.0.0",
+  "private": true,
+  "description": "ระบบจัดการร้านอาหารตามใจ (หน้าเว็บ + Firebase) — package นี้ใช้เฉพาะสคริปต์ดูแลระบบใน tools/",
+  "license": "MIT",
+  "devDependencies": {
+    "firebase-admin": "^13.10.0"
+  }
+}
