@@ -86,7 +86,12 @@ public/                      ── หน้าเว็บ (ขึ้น Hosti
   index.html                 โครงหน้า + โหลด Firebase SDK และไฟล์ JS ตามลำดับ
   css/style.css
   js/firebase-config.js      ค่าเชื่อมต่อ Firebase (เป็นค่าสาธารณะ ไม่ใช่ความลับ)
-  js/db.js                   คุยกับ Firebase: เข้าสู่ระบบ, อ่าน/เขียนข้อมูล, ตัดสต็อก, รีเซ็ต
+  js/db/*.js                 ชั้นข้อมูล (คุยกับ Firebase) แยกเป็นส่วนๆ โหลดตามลำดับใน index.html:
+                               core (ตั้งค่า/ตรวจสิทธิ์/Audit) · session (ล็อกอินค้าง) · loaders (โหลดข้อมูล)
+                               orders (สร้างออเดอร์/รับคิว) · live (real-time) · cancel (ยกเลิก) · payments (รับเงิน)
+                               seed (ข้อมูลตัวอย่าง/รีเซ็ต) · router (ตัวลงทะเบียนเส้นทาง)
+                               routes-auth / people / stock / menu / tables / orders / reports / users (เส้นทางแต่ละหมวด)
+                               dispatch (dbApi ที่หน้าจอเรียก)
   js/api.js                  โหลดข้อมูลใหม่, หน้าต่างเข้าสู่ระบบ, รับออเดอร์ลูกค้า
   js/seed-data.js            ข้อมูลตัวอย่างสำหรับปุ่มรีเซ็ต
   js/utils.js, config.js, state.js, modal.js, components.js, app.js, views/*.js
